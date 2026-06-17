@@ -1,0 +1,30 @@
+# Core
+mediapipe==0.10.35
+opencv-python==4.13.0.92
+numpy==2.4.6
+pandas==3.0.3
+scikit-learn==1.9.0
+matplotlib==3.10.9
+joblib==1.5.3
+pytest==8.4.0
+
+# Transitive dependencies
+absl-py==2.4.0
+certifi==2026.5.20
+cffi==2.0.0
+contourpy==1.3.3
+cycler==0.12.1
+flatbuffers==25.12.19
+fonttools==4.63.0
+kiwisolver==1.5.0
+narwhals==2.22.1
+opencv-contrib-python==4.13.0.92
+packaging==26.2
+pillow==12.2.0
+pycparser==3.0
+pyparsing==3.3.2
+python-dateutil==2.9.0.post0
+scipy==1.17.1
+six==1.17.0
+sounddevice==0.5.5
+threadpoolctl==3.6.0

@@ -1,0 +1,20 @@
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[codz]
+*$py.class
+
+# Data videos
+data/videos/
+
+# MediaPipe model
+pose_landmarker_lite.task
+
+# IDEs
+.vscode/
+.idea/
