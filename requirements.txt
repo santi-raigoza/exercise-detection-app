@@ -7,6 +7,7 @@ scikit-learn==1.9.0
 matplotlib==3.10.9
 joblib==1.5.3
 pytest==8.4.0
+gradio==6.28.0
 
 # Transitive dependencies
 absl-py==2.4.0
