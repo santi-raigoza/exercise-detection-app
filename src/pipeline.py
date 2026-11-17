@@ -13,7 +13,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
 
 from utils.landmarks import normalize, build_window, POSE_CONNECTIONS
-from utils.rep_counter import RepCounter
+from utils.rep_counter import CONFIDENCE_THRESHOLD, RepCounter
 
 WINDOW_SIZE = 30  # frames per classification window — must match training
 PAUSE_GAP   = 2.0 # seconds between frames treated as a pause in recording
@@ -104,7 +104,9 @@ class ExerciseSession:
         self.rep_counter  = RepCounter()
         self.exercise, self.confidence = 'rest', 0.0
         self.segments = []      # closed segments: (exercise, reps, start_t, end_t)
-        self._seg_start = None  # start time of the segment the rep counter is on
+        self._seg_start = None
+        self._seg_exercise = None
+        self._seg_count_start = 0
         self.elapsed = 0.0      # seconds of active recording
         self._last_t = None
 
@@ -126,11 +128,18 @@ class ExerciseSession:
         prev_exercise, prev_count = self.rep_counter.exercise, self.rep_counter.count
         self.rep_counter.update(self.exercise, self.confidence, landmarks)
 
-        # RepCounter resets when the exercise changes — log the finished segment
-        if self.rep_counter.exercise != prev_exercise:
-            if prev_exercise is not None:
-                self.segments.append((prev_exercise, prev_count, self._seg_start, t))
-            self._seg_start = t
+        # The counter retains its exercise/count through rest. Segment activity
+        # follows confident predictions independently of that retained value.
+        if self.confidence >= CONFIDENCE_THRESHOLD:
+            active = None if self.exercise == 'rest' else self.rep_counter.exercise
+            if active != self._seg_exercise:
+                if self._seg_exercise is not None:
+                    self.segments.append((self._seg_exercise,
+                                          prev_count - self._seg_count_start,
+                                          self._seg_start, t))
+                self._seg_exercise = active
+                self._seg_start = t if active is not None else None
+                self._seg_count_start = (prev_count if active == prev_exercise else 0)
 
     def process(self, frame_bgr, landmarker, t=0.0, fps=None, detect_frame=None):
         """
@@ -159,8 +168,9 @@ class ExerciseSession:
     def summary(self, end_t):
         """All segments, including the one still in progress."""
         segments = list(self.segments)
-        if self.rep_counter.exercise is not None:
-            segments.append((self.rep_counter.exercise, self.count, self._seg_start, end_t))
+        if self._seg_exercise is not None:
+            segments.append((self._seg_exercise, self.count - self._seg_count_start,
+                             self._seg_start, end_t))
         return segments
 
 
@@ -173,18 +183,20 @@ def _fit(w, h, max_side, min_side=0):
     return int(w * k) // 2 * 2, int(h * k) // 2 * 2
 
 
+def _require_ffmpeg():
+    if shutil.which('ffmpeg') is None:
+        raise RuntimeError('Video analysis requires ffmpeg. Install ffmpeg and try again.')
+
+
 class _VideoWriter:
     """
     Writes browser-playable H.264 in a single high-quality encode via ffmpeg, copying the
-    audio from audio_src. Falls back to OpenCV's mp4v (no audio) if ffmpeg isn't installed.
+    audio from audio_src. Requires ffmpeg with the libx264 encoder.
     """
 
     def __init__(self, out_path, size, fps, audio_src, max_seconds):
         w, h = size
-        self._cv_writer = self._proc = None
-        if shutil.which('ffmpeg') is None:
-            self._cv_writer = cv2.VideoWriter(str(out_path), cv2.VideoWriter_fourcc(*'mp4v'), fps, size)
-            return
+        _require_ffmpeg()
         self._proc = subprocess.Popen(
             ['ffmpeg', '-y', '-loglevel', 'error',
              '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{w}x{h}', '-r', str(fps), '-i', '-',
@@ -195,15 +207,9 @@ class _VideoWriter:
             stdin=subprocess.PIPE, stderr=subprocess.PIPE)
 
     def write(self, frame):
-        if self._cv_writer is not None:
-            self._cv_writer.write(frame)
-        else:
-            self._proc.stdin.write(frame.tobytes())
+        self._proc.stdin.write(frame.tobytes())
 
     def close(self):
-        if self._cv_writer is not None:
-            self._cv_writer.release()
-            return
         _, err = self._proc.communicate()
         if self._proc.returncode != 0:
             raise RuntimeError(f'ffmpeg failed: {err.decode(errors="replace").strip()}')
@@ -219,8 +225,10 @@ def process_video(path, landmarker, model, scaler, max_seconds=30,
     Processes at most max_seconds.
     Returns (annotated_mp4_path, segments) where segments are (exercise, reps, start_s, end_s).
     """
+    _require_ffmpeg()
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
+        cap.release()
         raise ValueError(f'Could not open video: {path}')
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
 
@@ -230,29 +238,33 @@ def process_video(path, landmarker, model, scaler, max_seconds=30,
     frame_idx = 0
 
     try:
-        while frame_idx < max_seconds * fps:
-            success, frame = cap.read()
-            if not success:
-                break
-            h, w, _ = frame.shape
-            out_size, det_size = _fit(w, h, max_side, min_side), _fit(w, h, detect_side)
-            detect_frame = frame if det_size == (w, h) else \
-                cv2.resize(frame, det_size, interpolation=cv2.INTER_AREA)
-            if out_size != (w, h):
-                upscaling = out_size[0] > w
-                frame = cv2.resize(frame, out_size,
-                                   interpolation=cv2.INTER_CUBIC if upscaling else cv2.INTER_AREA)
-            if writer is None:
-                writer = _VideoWriter(out_path, out_size, fps, path, max_seconds)
+        try:
+            while frame_idx < max_seconds * fps:
+                success, frame = cap.read()
+                if not success:
+                    break
+                h, w, _ = frame.shape
+                out_size, det_size = _fit(w, h, max_side, min_side), _fit(w, h, detect_side)
+                detect_frame = frame if det_size == (w, h) else \
+                    cv2.resize(frame, det_size, interpolation=cv2.INTER_AREA)
+                if out_size != (w, h):
+                    upscaling = out_size[0] > w
+                    frame = cv2.resize(frame, out_size,
+                                       interpolation=cv2.INTER_CUBIC if upscaling else cv2.INTER_AREA)
+                if writer is None:
+                    writer = _VideoWriter(out_path, out_size, fps, path, max_seconds)
 
-            session.process(frame, landmarker, t=frame_idx / fps, detect_frame=detect_frame)
-            writer.write(frame)
-            frame_idx += 1
-    finally:
-        cap.release()
-        if writer is not None:
-            writer.close()
+                session.process(frame, landmarker, t=frame_idx / fps, detect_frame=detect_frame)
+                writer.write(frame)
+                frame_idx += 1
+        finally:
+            cap.release()
+            if writer is not None:
+                writer.close()
 
-    if writer is None:
-        raise ValueError('The video contains no readable frames.')
-    return out_path, session.summary(frame_idx / fps)
+        if writer is None:
+            raise ValueError('The video contains no readable frames.')
+        return out_path, session.summary(frame_idx / fps)
+    except BaseException:
+        shutil.rmtree(out_path.parent, ignore_errors=True)
+        raise

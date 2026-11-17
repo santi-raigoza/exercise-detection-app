@@ -46,7 +46,13 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Optional: install `ffmpeg` (e.g. `brew install ffmpeg`) so annotated videos from the web app's Upload tab keep their audio and play in every browser. Without it, videos are saved without audio.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:7be15c854af628641d26b183d8e277f6d392fa9a461bdaaf6f1fb67edb7ec9de -->
+
+Install `ffmpeg` with the libx264 encoder (e.g. `brew install ffmpeg`) to use the web app's Upload tab. Upload analysis requires it to produce browser-compatible H.264 video with audio; it reports an error before processing if ffmpeg is missing.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 The MediaPipe pose model (`pose_landmarker_lite.task`) is downloaded to the project root automatically the first time any script runs.
 

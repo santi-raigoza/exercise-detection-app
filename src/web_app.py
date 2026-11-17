@@ -1,5 +1,6 @@
 import base64
 import html
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -98,18 +99,39 @@ def _stats(session):
     '''
 
 
-def stream_frame(frame_rgb, session):
-    if frame_rgb is None:
-        return None, session, _stats(session)
-    if session is None:
-        session = ExerciseSession(MODEL, SCALER)
-    frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
-    session.process(frame_bgr, LANDMARKER, t=time.time())
-    return cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB), session, _stats(session)
+class _SessionHolder:
+    """Stable per-browser state shared by frame and reset handlers."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.frame_lock = threading.Lock()
+        self.generation = 0
+        self.session = None
 
 
-def reset_session():
-    return None, _stats(None)
+def stream_frame(frame_rgb, holder):
+    # Serialize mutations by frames for this browser, without blocking Reset
+    # while pose detection is running. Never return the holder as a State output.
+    with holder.frame_lock:
+        with holder.lock:
+            if frame_rgb is None:
+                return None, _stats(holder.session)
+            if holder.session is None:
+                holder.session = ExerciseSession(MODEL, SCALER)
+            session, generation = holder.session, holder.generation
+        frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+        session.process(frame_bgr, LANDMARKER, t=time.time())
+        with holder.lock:
+            if generation != holder.generation:
+                return gr.skip(), gr.skip()
+            return cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB), _stats(session)
+
+
+def reset_session(holder):
+    with holder.lock:
+        holder.generation += 1
+        holder.session = None
+        return _stats(None)
 
 
 def analyze_video(video_path):
@@ -120,9 +142,15 @@ def analyze_video(video_path):
                                            max_seconds=MAX_UPLOAD_SECONDS)
     except (ValueError, RuntimeError) as e:
         raise gr.Error(str(e))
-    rows = [[_pretty(exercise), reps, round(start, 1), round(end, 1)]
-            for exercise, reps, start, end in segments]
-    return str(out_path), rows
+    try:
+        rows = [[_pretty(exercise), reps, round(start, 1), round(end, 1)]
+                for exercise, reps, start, end in segments]
+        # This synchronous Gradio API finishes the cache copy before returning.
+        # Subsequent Video postprocessing reads the cached file, not our source.
+        cached_path = video_out.move_resource_to_block_cache(out_path)
+        return cached_path, rows
+    finally:
+        shutil.rmtree(out_path.parent, ignore_errors=True)
 
 
 # Pine (primary) and sage (neutral) scales replace Gradio's default blue and grey, so built-in
@@ -207,7 +235,7 @@ with gr.Blocks(title='Exercise Detection') as demo:
 
     with gr.Tabs(elem_classes='ed-tabs'):
         with gr.Tab('Live webcam'):
-            session_state = gr.State(None)
+            session_state = gr.State(_SessionHolder)
             with gr.Row(equal_height=True):
                 cam = gr.Image(sources=['webcam'], streaming=True, label='Camera')
                 annotated = gr.Image(label='Detection', interactive=False)
@@ -217,10 +245,10 @@ with gr.Blocks(title='Exercise Detection') as demo:
             # show_progress='hidden' stops Gradio's per-frame loading timer/fade from
             # flickering over the outputs on every streamed frame
             cam.stream(stream_frame, inputs=[cam, session_state],
-                       outputs=[annotated, session_state, stats],
+                       outputs=[annotated, stats],
                        stream_every=0.1, time_limit=600, concurrency_limit=4,
                        show_progress='hidden')
-            reset_btn.click(reset_session, outputs=[session_state, stats])
+            reset_btn.click(reset_session, inputs=session_state, outputs=stats)
 
         with gr.Tab('Upload video'):
             gr.HTML(f'<p class="ed-note">Only the first {MAX_UPLOAD_SECONDS} seconds of a video '

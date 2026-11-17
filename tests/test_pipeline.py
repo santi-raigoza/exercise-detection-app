@@ -103,3 +103,56 @@ def test_process_video_output_size_and_audio(tmp_path, in_size, out_size):
                                      '-of', 'csv=p=0', str(out_path)],
                                     capture_output=True, text=True).stdout)
     assert duration == pytest.approx(2, abs=0.2)  # capped at max_seconds, audio trimmed to match
+
+
+def test_rest_closes_segment_and_resume_counts_only_new_reps():
+    model = _FakeModel()
+    session = ExerciseSession(model, _IdentityScaler())
+    for t in range(WINDOW_SIZE):
+        session.step(_pose(), t)
+    for t, bend in enumerate([0.4] * 10 + [0.0] * 10, WINDOW_SIZE):
+        session.step(_pose(bend), t)
+    model.current = 'rest'
+    session.step(_pose(), 50)
+    assert session.summary(70) == [('squat', 1, 29, 50)]
+    assert session.count == 1  # retained counter remains compatible with live overlay
+    model.current = 'squat'
+    session.step(_pose(), 70)
+    for t, bend in enumerate([0.4] * 10 + [0.0] * 10, 71):
+        session.step(_pose(bend), t)
+    assert session.summary(91) == [('squat', 1, 29, 50), ('squat', 1, 70, 91)]
+    session.exercise, session.confidence = 'rest', 0.5
+    session.frame_buffer.clear()  # keep the low confidence prediction for this step
+    session.step(_pose(), 92)
+    assert session.summary(93)[-1] == ('squat', 1, 70, 93)
+
+
+def test_missing_ffmpeg_fails_before_opening_video(monkeypatch):
+    import pipeline
+    monkeypatch.setattr(pipeline.shutil, 'which', lambda _: None)
+    monkeypatch.setattr(cv2, 'VideoCapture', lambda _: pytest.fail('opened video'))
+    with pytest.raises(RuntimeError, match='requires ffmpeg'):
+        process_video('unused', None, None, None)
+
+
+@pytest.mark.parametrize('failure', ['process', 'close', 'empty'])
+def test_failed_processing_removes_output(tmp_path, monkeypatch, failure):
+    import pipeline
+    output = tmp_path / 'exercise_test'
+    output.mkdir()
+    (output / 'annotated.mp4').write_bytes(b'partial')
+    monkeypatch.setattr(pipeline, '_require_ffmpeg', lambda: None)
+    monkeypatch.setattr(pipeline.tempfile, 'mkdtemp', lambda **_: str(output))
+    cap = SimpleNamespace(isOpened=lambda: True, get=lambda _: 10,
+                          read=lambda: (False, None) if failure == 'empty' else
+                          (True, np.zeros((10, 10, 3), dtype=np.uint8)),
+                          release=lambda: None)
+    monkeypatch.setattr(cv2, 'VideoCapture', lambda _: cap)
+    def fail(*args, **kwargs):
+        raise RuntimeError('failure')
+    monkeypatch.setattr(ExerciseSession, 'process', fail if failure == 'process' else lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, '_VideoWriter', lambda *a: SimpleNamespace(
+        write=lambda _: None, close=fail if failure == 'close' else lambda: None))
+    with pytest.raises((RuntimeError, ValueError)):
+        process_video('unused', None, None, None, max_seconds=0.1, min_side=0)
+    assert not output.exists()
