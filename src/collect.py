@@ -9,11 +9,11 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
 
+from pipeline import ensure_pose_model
 from utils.landmarks import normalize, build_window, POSE_CONNECTIONS
 
 WINDOW_SIZE = 30
 STRIDE = 5
-TASK_PATH = str(Path(__file__).parent.parent / 'pose_landmarker_lite.task')
 EXERCISES = ['pushup', 'pullup', 'squat', 'jumping_jack', 'rest']
 
 
@@ -55,7 +55,7 @@ def main():
     args = parser.parse_args()
 
     options = PoseLandmarkerOptions(
-        base_options=python.BaseOptions(model_asset_path=TASK_PATH),
+        base_options=python.BaseOptions(model_asset_path=str(ensure_pose_model())),
         running_mode=RunningMode.IMAGE,
     )
     landmarker = PoseLandmarker.create_from_options(options)

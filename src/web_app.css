@@ -1,0 +1,268 @@
+/* Exercise Detection — "home gym at golden hour": sage paper, pine ink, one honey accent. */
+
+:root {
+  --ed-paper: #ECEFE7;
+  --ed-card: #F8F9F5;
+  --ed-ink: #22413A;
+  --ed-muted: #62786D;
+  --ed-line: #D5DDD0;
+  --ed-honey: #E2A03F;
+  --ed-tile-bold: #22413A;
+  --ed-tile-bold-label: #BFD2C6;
+  --ed-display: 'Bricolage Grotesque', 'Figtree', ui-sans-serif, system-ui, sans-serif;
+}
+
+.dark {
+  --ed-paper: #121D1A;
+  --ed-card: #1A2925;
+  --ed-ink: #E3EBE5;
+  --ed-muted: #93A79C;
+  --ed-line: #2A3B35;
+  --ed-honey: #EDB257;
+  --ed-tile-bold: #24473E;
+  --ed-tile-bold-label: #A9C2B4;
+}
+
+.gradio-container {
+  max-width: 1120px !important;
+  margin: 0 auto !important;
+  padding-top: 16px !important;
+}
+
+/* Gradio pads HTML blocks by default; drop it so text lines up with the panels */
+.gradio-container .html-container {
+  padding: 0 !important;
+}
+
+@media (max-width: 640px) {
+  .gradio-container {
+    padding: 0 !important;
+  }
+  .gradio-container .main {
+    padding: 24px 16px !important;
+  }
+}
+
+/* ---------- Header ---------- */
+
+.ed-hero h1 {
+  font-family: var(--ed-display);
+  font-size: clamp(2.2rem, 4.5vw, 3rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  color: var(--ed-ink);
+  margin: 0 0 12px;
+}
+
+.ed-hero p {
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  color: var(--ed-muted);
+  max-width: 62ch;
+  margin: 0;
+}
+
+/* ---------- Camera setup guide ---------- */
+
+.ed-guide {
+  margin-top: 36px;
+}
+
+.ed-guide-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 24px;
+  margin-bottom: 14px;
+}
+
+.ed-guide-head h2 {
+  font-family: var(--ed-display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ed-ink);
+  margin: 0;
+}
+
+.ed-guide-head p {
+  font-size: 0.9375rem;
+  color: var(--ed-muted);
+  margin: 0;
+}
+
+.ed-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ed-guide-card {
+  margin: 0;
+  padding: 8px 8px 14px;
+  background: var(--ed-card);
+  border: 1px solid var(--ed-line);
+  border-radius: 18px;
+}
+
+.ed-guide-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.ed-guide-card figcaption {
+  padding: 12px 6px 0;
+}
+
+.ed-guide-card strong {
+  display: block;
+  font-family: var(--ed-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--ed-ink);
+}
+
+.ed-guide-card span {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--ed-muted);
+}
+
+@media (max-width: 760px) {
+  .ed-guide-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Tabs as pills ---------- */
+
+.ed-tabs {
+  margin-top: 28px;
+}
+
+.ed-tabs button[role="tab"] {
+  border: none !important;
+  border-radius: 999px !important;
+  padding: 8px 18px !important;
+  font-weight: 600;
+  color: var(--ed-muted) !important;
+  background: transparent !important;
+}
+
+.ed-tabs button[role="tab"][aria-selected="true"] {
+  background: var(--ed-ink) !important;
+  color: var(--ed-paper) !important;
+}
+
+/* Hide the default underline under the tab row and the selected tab */
+.ed-tabs button[role="tab"]::after,
+.ed-tabs .tab-container::after {
+  display: none !important;
+}
+
+.ed-tabs [role="tablist"] {
+  border-bottom: none !important;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+/* ---------- Live stats ---------- */
+
+.ed-stats {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.ed-stat {
+  padding: 14px 18px 16px;
+  background: var(--ed-card);
+  border: 1px solid var(--ed-line);
+  border-radius: 16px;
+}
+
+.ed-stat-label {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--ed-muted);
+}
+
+.ed-stat-value {
+  margin: 4px 0 0;
+  font-family: var(--ed-display);
+  font-size: 1.625rem;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--ed-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The one bold element: the rep count */
+.ed-stat-reps {
+  background: var(--ed-tile-bold);
+  border-color: var(--ed-tile-bold);
+}
+
+.ed-stat-reps .ed-stat-label {
+  color: var(--ed-tile-bold-label);
+}
+
+.ed-stat-reps .ed-stat-value {
+  font-size: 2.75rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ed-honey);
+}
+
+@media (max-width: 560px) {
+  .ed-stats {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .ed-stats .ed-stat:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.ed-note {
+  font-size: 0.9375rem;
+  color: var(--ed-muted);
+  margin: 0 0 4px;
+}
+
+.ed-subhead {
+  font-family: var(--ed-display);
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--ed-ink);
+  margin: 12px 0 0;
+}
+
+/* Results table: body font with even-width digits instead of Gradio's monospace */
+.ed-table,
+.ed-table * {
+  font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.ed-inline-btn {
+  align-self: flex-start;
+  width: auto !important;
+  min-width: 0 !important;
+  flex-grow: 0 !important;
+  padding-left: 22px !important;
+  padding-right: 22px !important;
+}
+
+/* Visible keyboard focus in the accent color */
+.gradio-container button:focus-visible,
+.gradio-container [role="tab"]:focus-visible {
+  outline: 2px solid var(--ed-honey) !important;
+  outline-offset: 2px;
+}

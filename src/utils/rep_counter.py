@@ -113,3 +113,8 @@ class RepCounter:
     @property
     def count(self):
         return self._count
+
+    @property
+    def exercise(self):
+        """Exercise currently being counted (None until the first confident prediction)."""
+        return self._exercise
